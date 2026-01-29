@@ -15,3 +15,4 @@
     - `coding-standards.md`
     - `react-guidlines.md`
     - `design-system.md`
+6.  **AI 스킬 추가**: Web Interface Guidelines 검토를 위한 커스텀 스킬 설정 (`.gemini/skills/web-design-guidelines`)
