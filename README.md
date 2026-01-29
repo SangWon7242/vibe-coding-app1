@@ -16,3 +16,7 @@
     - `react-guidlines.md`
     - `design-system.md`
 6.  **AI 스킬 추가**: Web Interface Guidelines 검토를 위한 커스텀 스킬 설정 (`.gemini/skills/web-design-guidelines`)
+7.  **Habit Tracker UI 개발**:
+    - 모바일 앱 스타일의 기본 레이아웃 설계 (Header, Progress Card, Input, List, Bottom Nav)
+    - Shadcn UI 컴포넌트 추가 (`button`, `input`, `card`, `checkbox`, `sheet`)
+    - TypeScript 기반 데이터 구조 및 목 데이터 세팅
