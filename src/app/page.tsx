@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Menu, Plus, Check } from "lucide-react";
+import { Menu, Plus, Check, Pencil, Trash2, X, Save } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
@@ -35,12 +35,20 @@ export default function HabitTrackerPage() {
   const [habits, setHabits] = useState<Habit[]>(initialHabits);
   // 새 습관 입력값 상태
   const [newHabit, setNewHabit] = useState<string>("");
+  // 수정 모드 상태: 현재 수정 중인 습관의 ID (null이면 수정 모드가 아님)
+  const [editingId, setEditingId] = useState<number | null>(null);
+  // 수정 중인 텍스트 상태
+  const [editingText, setEditingText] = useState<string>("");
 
   /**
    * 새 습관 추가 핸들러
+   * 빈칸일 경우 경고창 표시
    */
   const handleAddHabit = () => {
-    if (newHabit.trim() === "") return;
+    if (newHabit.trim() === "") {
+      alert("루틴을 입력하세요.");
+      return;
+    }
     const newId =
       habits.length > 0 ? Math.max(...habits.map((h) => h.id)) + 1 : 1;
     setHabits([
@@ -62,11 +70,63 @@ export default function HabitTrackerPage() {
     );
   };
 
+  /**
+   * 수정 모드 진입 핸들러
+   * @param habit - 수정할 습관 객체
+   */
+  const handleStartEdit = (habit: Habit) => {
+    setEditingId(habit.id);
+    setEditingText(habit.title);
+  };
+
+  /**
+   * 수정 취소 핸들러
+   * 수정하지 않은 경우 이전 상태 유지
+   */
+  const handleCancelEdit = () => {
+    setEditingId(null);
+    setEditingText("");
+  };
+
+  /**
+   * 수정 완료 핸들러
+   * 수정된 내용을 반영
+   */
+  const handleSaveEdit = () => {
+    if (editingId === null) return;
+
+    // 수정된 텍스트가 비어있으면 원래 값 유지
+    const trimmedText = editingText.trim();
+    if (trimmedText === "") {
+      handleCancelEdit();
+      return;
+    }
+
+    setHabits(
+      habits.map((habit) =>
+        habit.id === editingId ? { ...habit, title: trimmedText } : habit,
+      ),
+    );
+    setEditingId(null);
+    setEditingText("");
+  };
+
+  /**
+   * 습관 삭제 핸들러
+   * 확인 후 삭제 진행
+   * @param id - 삭제할 습관의 ID
+   */
+  const handleDeleteHabit = (id: number) => {
+    if (window.confirm("정말 삭제하겠습니까?")) {
+      setHabits(habits.filter((habit) => habit.id !== id));
+    }
+  };
+
   // 완료된 습관 개수 계산
   const completedCount = habits.filter((h) => h.completed).length;
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-pink-100 via-purple-50 to-blue-100">
+    <div className="min-h-screen bg-gradient-to-br from-pink-100 via-purple-50 to-blue-100 pb-24">
       {/* 헤더 영역 */}
       <header className="sticky top-0 z-50 bg-white/80 backdrop-blur-md border-b border-pink-200 shadow-sm">
         <div className="max-w-md mx-auto px-4 py-4 flex items-center justify-between">
@@ -158,9 +218,9 @@ export default function HabitTrackerPage() {
           </CardContent>
         </Card>
 
-        {/* 습관 리스트 */}
-        <div className="space-y-3">
-          <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wide">
+        {/* 습관 리스트 - 스크롤 가능하도록 설정 */}
+        <div className="space-y-3 overflow-y-auto max-h-[calc(100vh-380px)]">
+          <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wide sticky top-0 bg-gradient-to-br from-pink-100 via-purple-50 to-blue-100 py-2">
             Today&apos;s Habits
           </h2>
           {habits.map((habit) => (
@@ -172,25 +232,79 @@ export default function HabitTrackerPage() {
                   : "bg-white hover:shadow-lg"
               }`}
             >
-              <CardContent className="p-4 flex items-center gap-3">
-                <Checkbox
-                  id={`habit-${habit.id}`}
-                  checked={habit.completed}
-                  onCheckedChange={() => handleToggleComplete(habit.id)}
-                  className="h-5 w-5 border-purple-300 data-[state=checked]:bg-green-500 data-[state=checked]:border-green-500"
-                />
-                <label
-                  htmlFor={`habit-${habit.id}`}
-                  className={`flex-1 cursor-pointer ${
-                    habit.completed
-                      ? "line-through text-gray-400"
-                      : "text-gray-700"
-                  }`}
-                >
-                  {habit.title}
-                </label>
-                {habit.completed && (
-                  <Check className="h-5 w-5 text-green-500" />
+              <CardContent className="p-4">
+                {/* 수정 모드일 때 */}
+                {editingId === habit.id ? (
+                  <div className="flex flex-col gap-3">
+                    <Input
+                      type="text"
+                      value={editingText}
+                      onChange={(e) => setEditingText(e.target.value)}
+                      onKeyDown={(e) => e.key === "Enter" && handleSaveEdit()}
+                      className="border-purple-200 focus-visible:ring-purple-400"
+                      autoFocus
+                    />
+                    <div className="flex gap-2 justify-end">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={handleCancelEdit}
+                        className="text-gray-500"
+                      >
+                        <X className="h-4 w-4 mr-1" />
+                        취소
+                      </Button>
+                      <Button
+                        size="sm"
+                        onClick={handleSaveEdit}
+                        className="bg-green-600 hover:bg-green-700 text-white"
+                      >
+                        <Save className="h-4 w-4 mr-1" />
+                        수정 완료
+                      </Button>
+                    </div>
+                  </div>
+                ) : (
+                  /* 일반 모드일 때 */
+                  <div className="flex items-center gap-3">
+                    <Checkbox
+                      id={`habit-${habit.id}`}
+                      checked={habit.completed}
+                      onCheckedChange={() => handleToggleComplete(habit.id)}
+                      className="h-5 w-5 border-purple-300 data-[state=checked]:bg-green-500 data-[state=checked]:border-green-500 shrink-0"
+                    />
+                    <label
+                      htmlFor={`habit-${habit.id}`}
+                      className={`flex-1 cursor-pointer break-words ${
+                        habit.completed
+                          ? "line-through text-gray-400"
+                          : "text-gray-700"
+                      }`}
+                    >
+                      {habit.title}
+                    </label>
+                    {habit.completed && (
+                      <Check className="h-5 w-5 text-green-500 shrink-0" />
+                    )}
+                    {/* 수정 버튼 */}
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => handleStartEdit(habit)}
+                      className="h-8 w-8 text-purple-500 hover:text-purple-700 hover:bg-purple-100 shrink-0"
+                    >
+                      <Pencil className="h-4 w-4" />
+                    </Button>
+                    {/* 삭제 버튼 */}
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => handleDeleteHabit(habit.id)}
+                      className="h-8 w-8 text-red-400 hover:text-red-600 hover:bg-red-100 shrink-0"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </div>
                 )}
               </CardContent>
             </Card>

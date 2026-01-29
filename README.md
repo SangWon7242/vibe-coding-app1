@@ -20,3 +20,8 @@
     - 모바일 앱 스타일의 기본 레이아웃 설계 (Header, Progress Card, Input, List, Bottom Nav)
     - Shadcn UI 컴포넌트 추가 (`button`, `input`, `card`, `checkbox`, `sheet`)
     - TypeScript 기반 데이터 구조 및 목 데이터 세팅
+8.  **Habit Tracker CRUD 기능 구현**:
+    - **Create**: 루틴 추가 (빈칸 시 경고창 표시)
+    - **Update**: 인라인 수정 모드 (수정/취소 버튼, 미수정 시 원상복구)
+    - **Delete**: 삭제 확인창 후 즉시 삭제
+    - 스크롤 가능한 리스트 및 텍스트 줄바꿈 처리
