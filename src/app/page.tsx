@@ -1,7 +1,19 @@
 "use client";
 
 import { useState } from "react";
-import { Menu, Plus, Check, Pencil, Trash2, X, Save } from "lucide-react";
+import {
+  Menu,
+  Plus,
+  Check,
+  Pencil,
+  Trash2,
+  X,
+  Save,
+  Home,
+  PieChart,
+  Settings,
+} from "lucide-react";
+import Swal from "sweetalert2";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
@@ -13,6 +25,7 @@ import {
   SheetTitle,
   SheetTrigger,
 } from "@/components/ui/sheet";
+import { EmptyState } from "@/components/EmptyState";
 import { Habit } from "@/types/habit";
 import { initialHabits } from "@/data/habits";
 
@@ -46,7 +59,12 @@ export default function HabitTrackerPage() {
    */
   const handleAddHabit = () => {
     if (newHabit.trim() === "") {
-      alert("루틴을 입력하세요.");
+      Swal.fire({
+        icon: "warning",
+        title: "입력 오류",
+        text: "루틴을 입력하세요.",
+        confirmButtonColor: "#9333ea",
+      });
       return;
     }
     const newId =
@@ -56,6 +74,13 @@ export default function HabitTrackerPage() {
       { id: newId, title: newHabit.trim(), completed: false },
     ]);
     setNewHabit("");
+    Swal.fire({
+      icon: "success",
+      title: "추가 완료",
+      text: "새로운 습관이 추가되었습니다!",
+      timer: 1500,
+      showConfirmButton: false,
+    });
   };
 
   /**
@@ -116,9 +141,27 @@ export default function HabitTrackerPage() {
    * 확인 후 삭제 진행
    * @param id - 삭제할 습관의 ID
    */
-  const handleDeleteHabit = (id: number) => {
-    if (window.confirm("정말 삭제하겠습니까?")) {
+  const handleDeleteHabit = async (id: number) => {
+    const result = await Swal.fire({
+      icon: "warning",
+      title: "삭제 확인",
+      text: "정말 이 습관을 삭제하시겠습니까?",
+      showCancelButton: true,
+      confirmButtonColor: "#ef4444",
+      cancelButtonColor: "#6b7280",
+      confirmButtonText: "삭제",
+      cancelButtonText: "취소",
+    });
+
+    if (result.isConfirmed) {
       setHabits(habits.filter((habit) => habit.id !== id));
+      Swal.fire({
+        icon: "success",
+        title: "삭제 완료",
+        text: "습관이 삭제되었습니다.",
+        timer: 1500,
+        showConfirmButton: false,
+      });
     }
   };
 
@@ -223,92 +266,99 @@ export default function HabitTrackerPage() {
           <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wide sticky top-0 bg-gradient-to-br from-pink-100 via-purple-50 to-blue-100 py-2">
             Today&apos;s Habits
           </h2>
-          {habits.map((habit) => (
-            <Card
-              key={habit.id}
-              className={`border-0 shadow-md transition-all duration-300 ${
-                habit.completed
-                  ? "bg-green-50 border-l-4 border-l-green-400"
-                  : "bg-white hover:shadow-lg"
-              }`}
-            >
-              <CardContent className="p-4">
-                {/* 수정 모드일 때 */}
-                {editingId === habit.id ? (
-                  <div className="flex flex-col gap-3">
-                    <Input
-                      type="text"
-                      value={editingText}
-                      onChange={(e) => setEditingText(e.target.value)}
-                      onKeyDown={(e) => e.key === "Enter" && handleSaveEdit()}
-                      className="border-purple-200 focus-visible:ring-purple-400"
-                      autoFocus
-                    />
-                    <div className="flex gap-2 justify-end">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={handleCancelEdit}
-                        className="text-gray-500"
+          {/* Empty State: 습관이 없을 때 표시 */}
+          {habits.length === 0 ? (
+            <EmptyState />
+          ) : (
+            habits.map((habit) => (
+              <Card
+                key={habit.id}
+                className={`border-0 shadow-md transition-all duration-300 ${
+                  habit.completed
+                    ? "bg-green-50 border-l-4 border-l-green-400"
+                    : "bg-white hover:shadow-lg"
+                }`}
+              >
+                <CardContent className="p-4">
+                  {/* 수정 모드일 때 */}
+                  {editingId === habit.id ? (
+                    <div className="flex flex-col gap-3">
+                      <Input
+                        type="text"
+                        value={editingText}
+                        onChange={(e) => setEditingText(e.target.value)}
+                        onKeyDown={(e) => e.key === "Enter" && handleSaveEdit()}
+                        className="border-purple-200 focus-visible:ring-purple-400"
+                        autoFocus
+                      />
+                      <div className="flex gap-2 justify-end">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={handleCancelEdit}
+                          className="text-gray-500"
+                        >
+                          <X className="h-4 w-4 mr-1" />
+                          취소
+                        </Button>
+                        <Button
+                          size="sm"
+                          onClick={handleSaveEdit}
+                          className="bg-green-600 hover:bg-green-700 text-white"
+                        >
+                          <Save className="h-4 w-4 mr-1" />
+                          수정 완료
+                        </Button>
+                      </div>
+                    </div>
+                  ) : (
+                    /* 일반 모드일 때 */
+                    <div className="flex items-center gap-3">
+                      <Checkbox
+                        id={`habit-${habit.id}`}
+                        checked={habit.completed}
+                        onCheckedChange={() => handleToggleComplete(habit.id)}
+                        className="h-5 w-5 border-purple-300 data-[state=checked]:bg-green-500 data-[state=checked]:border-green-500 shrink-0"
+                      />
+                      <label
+                        htmlFor={`habit-${habit.id}`}
+                        className={`flex-1 cursor-pointer break-words ${
+                          habit.completed
+                            ? "line-through text-gray-400"
+                            : "text-gray-700"
+                        }`}
                       >
-                        <X className="h-4 w-4 mr-1" />
-                        취소
+                        {habit.title}
+                      </label>
+                      {habit.completed && (
+                        <Check className="h-5 w-5 text-green-500 shrink-0" />
+                      )}
+                      {/* 수정 버튼 */}
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => handleStartEdit(habit)}
+                        className="h-8 w-8 text-purple-500 hover:text-purple-700 hover:bg-purple-100 shrink-0"
+                        aria-label={`${habit.title} 수정하기`}
+                      >
+                        <Pencil className="h-4 w-4" />
                       </Button>
+                      {/* 삭제 버튼 */}
                       <Button
-                        size="sm"
-                        onClick={handleSaveEdit}
-                        className="bg-green-600 hover:bg-green-700 text-white"
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => handleDeleteHabit(habit.id)}
+                        className="h-8 w-8 text-red-400 hover:text-red-600 hover:bg-red-100 shrink-0"
+                        aria-label={`${habit.title} 삭제하기`}
                       >
-                        <Save className="h-4 w-4 mr-1" />
-                        수정 완료
+                        <Trash2 className="h-4 w-4" />
                       </Button>
                     </div>
-                  </div>
-                ) : (
-                  /* 일반 모드일 때 */
-                  <div className="flex items-center gap-3">
-                    <Checkbox
-                      id={`habit-${habit.id}`}
-                      checked={habit.completed}
-                      onCheckedChange={() => handleToggleComplete(habit.id)}
-                      className="h-5 w-5 border-purple-300 data-[state=checked]:bg-green-500 data-[state=checked]:border-green-500 shrink-0"
-                    />
-                    <label
-                      htmlFor={`habit-${habit.id}`}
-                      className={`flex-1 cursor-pointer break-words ${
-                        habit.completed
-                          ? "line-through text-gray-400"
-                          : "text-gray-700"
-                      }`}
-                    >
-                      {habit.title}
-                    </label>
-                    {habit.completed && (
-                      <Check className="h-5 w-5 text-green-500 shrink-0" />
-                    )}
-                    {/* 수정 버튼 */}
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      onClick={() => handleStartEdit(habit)}
-                      className="h-8 w-8 text-purple-500 hover:text-purple-700 hover:bg-purple-100 shrink-0"
-                    >
-                      <Pencil className="h-4 w-4" />
-                    </Button>
-                    {/* 삭제 버튼 */}
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      onClick={() => handleDeleteHabit(habit.id)}
-                      className="h-8 w-8 text-red-400 hover:text-red-600 hover:bg-red-100 shrink-0"
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          ))}
+                  )}
+                </CardContent>
+              </Card>
+            ))
+          )}
         </div>
       </main>
 
@@ -318,33 +368,25 @@ export default function HabitTrackerPage() {
           <Button
             variant="ghost"
             className="flex-col gap-1 h-auto py-2 text-purple-600"
+            aria-label="홈으로 이동"
           >
-            <svg className="h-5 w-5" fill="currentColor" viewBox="0 0 20 20">
-              <path d="M10.707 2.293a1 1 0 00-1.414 0l-7 7a1 1 0 001.414 1.414L4 10.414V17a1 1 0 001 1h2a1 1 0 001-1v-2a1 1 0 011-1h2a1 1 0 011 1v2a1 1 0 001 1h2a1 1 0 001-1v-6.586l.293.293a1 1 0 001.414-1.414l-7-7z" />
-            </svg>
+            <Home className="h-5 w-5" />
             <span className="text-xs">홈</span>
           </Button>
           <Button
             variant="ghost"
             className="flex-col gap-1 h-auto py-2 text-gray-400"
+            aria-label="통계 보기"
           >
-            <svg className="h-5 w-5" fill="currentColor" viewBox="0 0 20 20">
-              <path d="M2 10a8 8 0 018-8v8h8a8 8 0 11-16 0z" />
-              <path d="M12 2.252A8.014 8.014 0 0117.748 8H12V2.252z" />
-            </svg>
+            <PieChart className="h-5 w-5" />
             <span className="text-xs">통계</span>
           </Button>
           <Button
             variant="ghost"
             className="flex-col gap-1 h-auto py-2 text-gray-400"
+            aria-label="설정으로 이동"
           >
-            <svg className="h-5 w-5" fill="currentColor" viewBox="0 0 20 20">
-              <path
-                fillRule="evenodd"
-                d="M11.49 3.17c-.38-1.56-2.6-1.56-2.98 0a1.532 1.532 0 01-2.286.948c-1.372-.836-2.942.734-2.106 2.106.54.886.061 2.042-.947 2.287-1.561.379-1.561 2.6 0 2.978a1.532 1.532 0 01.947 2.287c-.836 1.372.734 2.942 2.106 2.106a1.532 1.532 0 012.287.947c.379 1.561 2.6 1.561 2.978 0a1.533 1.533 0 012.287-.947c1.372.836 2.942-.734 2.106-2.106a1.533 1.533 0 01.947-2.287c1.561-.379 1.561-2.6 0-2.978a1.532 1.532 0 01-.947-2.287c.836-1.372-.734-2.942-2.106-2.106a1.532 1.532 0 01-2.287-.947zM10 13a3 3 0 100-6 3 3 0 000 6z"
-                clipRule="evenodd"
-              />
-            </svg>
+            <Settings className="h-5 w-5" />
             <span className="text-xs">설정</span>
           </Button>
         </div>

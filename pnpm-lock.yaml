@@ -44,6 +44,9 @@ importers:
       react-dom:
         specifier: 19.2.3
         version: 19.2.3(react@19.2.3)
+      sweetalert2:
+        specifier: ^11.26.18
+        version: 11.26.18
       tailwind-merge:
         specifier: ^3.4.0
         version: 3.4.0
@@ -2133,6 +2136,9 @@ packages:
   supports-preserve-symlinks-flag@1.0.0:
     resolution: {integrity: sha512-ot0WnXS9fgdkgIcePe6RHNk1WA8+muPa6cSjeR3V8K27q9BB1rTE3R1p7Hv0z1ZyAc8s6Vvv8DIyWf681MAt0w==}
     engines: {node: '>= 0.4'}
+
+  sweetalert2@11.26.18:
+    resolution: {integrity: sha512-3O5feBqV+hTIOwCRKGuZGHosjiuBAKP/vpBl6vKFZeVYfCUGdXqXuuidn6YXHan3f6e62UdmnjwJBt8UtDVBhg==}
 
   tailwind-merge@3.4.0:
     resolution: {integrity: sha512-uSaO4gnW+b3Y2aWoWfFpX62vn2sR3skfhbjsEnaBI81WD1wBLlHZe5sWf0AqjksNdYTbGBEd0UasQMT3SNV15g==}
@@ -4501,6 +4507,8 @@ snapshots:
       has-flag: 4.0.0
 
   supports-preserve-symlinks-flag@1.0.0: {}
+
+  sweetalert2@11.26.18: {}
 
   tailwind-merge@3.4.0: {}
 
