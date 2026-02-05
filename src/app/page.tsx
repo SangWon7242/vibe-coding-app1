@@ -17,6 +17,12 @@ import { WeeklyAccordion } from "@/components/WeeklyAccordion";
 import { EmptyState } from "@/components/EmptyState";
 import { Habit, DayOfWeek } from "@/types/habit";
 import { initialHabits } from "@/data/habits";
+import {
+  ICON_OPTIONS,
+  getIconOption,
+  getIconSvgPath,
+  IconType,
+} from "@/constants/icons";
 
 /**
  * 요일 목록
@@ -87,7 +93,33 @@ export default function HabitTrackerPage() {
   };
 
   /**
-   * 새 습관 추가 핸들러 (요일 선택 포함)
+   * 아이콘 선택 HTML 생성 함수
+   */
+  const generateIconSelectorHtml = (selectedIcon?: IconType): string => {
+    return `
+      <p class="text-sm text-gray-500 mb-4">아이콘을 선택하세요</p>
+      <div class="grid grid-cols-4 gap-3" id="icon-selector">
+        ${ICON_OPTIONS.map(
+          (opt) => `
+          <label class="cursor-pointer">
+            <input type="radio" name="icon" value="${opt.value}" class="hidden peer" ${opt.value === (selectedIcon || "droplet") ? "checked" : ""}>
+            <div class="w-14 h-14 rounded-xl border-2 border-gray-200 flex flex-col items-center justify-center gap-1
+                        transition-all peer-checked:border-blue-500 peer-checked:bg-blue-50
+                        hover:border-blue-300">
+              <svg class="w-6 h-6" style="color: ${opt.color}" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                ${getIconSvgPath(opt.value)}
+              </svg>
+              <span class="text-[10px] text-gray-600">${opt.label}</span>
+            </div>
+          </label>
+        `,
+        ).join("")}
+      </div>
+    `;
+  };
+
+  /**
+   * 새 습관 추가 핸들러 (요일 및 아이콘 선택 포함)
    */
   const handleAddHabit = async () => {
     // Step 1: 습관 이름 입력
@@ -110,7 +142,25 @@ export default function HabitTrackerPage() {
 
     if (!title) return;
 
-    // Step 2: 요일 선택
+    // Step 2: 아이콘 선택
+    const { value: selectedIcon } = await Swal.fire({
+      title: "아이콘 선택",
+      html: generateIconSelectorHtml(),
+      showCancelButton: true,
+      confirmButtonText: "다음",
+      cancelButtonText: "이전",
+      confirmButtonColor: "#3B82F6",
+      preConfirm: () => {
+        const selected = document.querySelector<HTMLInputElement>(
+          '#icon-selector input[name="icon"]:checked',
+        );
+        return selected?.value as IconType;
+      },
+    });
+
+    if (!selectedIcon) return;
+
+    // Step 3: 요일 선택
     const { value: selectedDays } = await Swal.fire({
       title: "요일 선택",
       html: `
@@ -138,7 +188,7 @@ export default function HabitTrackerPage() {
       `,
       showCancelButton: true,
       confirmButtonText: "추가",
-      cancelButtonText: "취소",
+      cancelButtonText: "이전",
       confirmButtonColor: "#3B82F6",
       didOpen: () => {
         // 전체 선택 버튼
@@ -186,36 +236,21 @@ export default function HabitTrackerPage() {
 
     if (!selectedDays) return;
 
+    // 선택된 아이콘 옵션 조회
+    const iconOption = getIconOption(selectedIcon);
+    if (!iconOption) return;
+
     // 습관 추가
     const newId =
       habits.length > 0 ? Math.max(...habits.map((h) => h.id)) + 1 : 1;
-    const icons: Habit["icon"][] = [
-      "droplet",
-      "run",
-      "book",
-      "brain",
-      "dumbbell",
-      "pen",
-      "moon",
-    ];
-    const colors = [
-      "#3B82F6",
-      "#F59E0B",
-      "#8B5CF6",
-      "#10B981",
-      "#F43F5E",
-      "#EC4899",
-      "#6366F1",
-    ];
-    const randomIndex = Math.floor(Math.random() * icons.length);
 
     setHabits([
       ...habits,
       {
         id: newId,
         title: title.trim(),
-        icon: icons[randomIndex],
-        color: colors[randomIndex],
+        icon: selectedIcon,
+        color: iconOption.color,
         current: 0,
         goal: 10,
         unit: "회",
@@ -234,7 +269,7 @@ export default function HabitTrackerPage() {
   };
 
   /**
-   * 루틴 수정 핸들러
+   * 루틴 수정 핸들러 (아이콘 수정 포함)
    */
   const handleEditHabit = async (habit: Habit) => {
     // Step 1: 이름 수정
@@ -257,7 +292,25 @@ export default function HabitTrackerPage() {
 
     if (!newTitle) return;
 
-    // Step 2: 요일 수정
+    // Step 2: 아이콘 수정
+    const { value: selectedIcon } = await Swal.fire({
+      title: "아이콘 선택",
+      html: generateIconSelectorHtml(habit.icon),
+      showCancelButton: true,
+      confirmButtonText: "다음",
+      cancelButtonText: "이전",
+      confirmButtonColor: "#3B82F6",
+      preConfirm: () => {
+        const selected = document.querySelector<HTMLInputElement>(
+          '#icon-selector input[name="icon"]:checked',
+        );
+        return selected?.value as IconType;
+      },
+    });
+
+    if (!selectedIcon) return;
+
+    // Step 3: 요일 수정
     const { value: selectedDays } = await Swal.fire({
       title: "요일 선택",
       html: `
@@ -280,7 +333,7 @@ export default function HabitTrackerPage() {
       `,
       showCancelButton: true,
       confirmButtonText: "저장",
-      cancelButtonText: "취소",
+      cancelButtonText: "이전",
       confirmButtonColor: "#3B82F6",
       preConfirm: () => {
         const checkboxes = document.querySelectorAll<HTMLInputElement>(
@@ -297,11 +350,21 @@ export default function HabitTrackerPage() {
 
     if (!selectedDays) return;
 
+    // 선택된 아이콘 옵션 조회
+    const iconOption = getIconOption(selectedIcon);
+    if (!iconOption) return;
+
     // 습관 업데이트
     setHabits(
       habits.map((h) =>
         h.id === habit.id
-          ? { ...h, title: newTitle.trim(), days: selectedDays }
+          ? {
+              ...h,
+              title: newTitle.trim(),
+              icon: selectedIcon,
+              color: iconOption.color,
+              days: selectedDays,
+            }
           : h,
       ),
     );
