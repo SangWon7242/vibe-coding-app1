@@ -25,13 +25,14 @@ const dayColorMap: Record<DayOfWeek, string> = {
 interface WeeklyAccordionProps {
   habits: Habit[];
   onToggleComplete: (id: string) => void;
-  onEdit: (habit: Habit) => void;
-  onDelete: (id: string) => void;
+  onEdit: (habit: Habit, day?: DayOfWeek) => void;
+  onDelete: (id: string, day?: DayOfWeek) => void;
 }
 
 /**
  * 주간 아코디언 컴포넌트
  * 요일별로 루틴을 그룹화하여 표시
+ * 체크인 상태는 오늘 요일에서만 표시됨
  */
 export function WeeklyAccordion({
   habits,
@@ -57,14 +58,41 @@ export function WeeklyAccordion({
   };
 
   /**
-   * 오늘 요일 가져오기
+   * 오늘 요일 인덱스 가져오기 (월=0, 일=6)
    */
   const getTodayIndex = (): number => {
     const today = new Date().getDay();
     return today === 0 ? 6 : today - 1;
   };
 
+  /**
+   * 오늘 요일 가져오기
+   */
+  const getTodayDay = (): DayOfWeek => {
+    return DAYS_OF_WEEK[getTodayIndex()];
+  };
+
   const todayIndex = getTodayIndex();
+  const todayDay = getTodayDay();
+
+  /**
+   * 해당 요일에서의 완료 상태 확인
+   * 오늘 요일에서만 실제 completed 상태 반환, 다른 요일은 false
+   */
+  const isCompletedForDay = (habit: Habit, day: DayOfWeek): boolean => {
+    if (day === todayDay) {
+      return habit.completed;
+    }
+    return false;
+  };
+
+  /**
+   * 해당 요일의 완료된 습관 개수
+   */
+  const getCompletedCountForDay = (day: DayOfWeek): number => {
+    const dayHabits = getHabitsForDay(day);
+    return dayHabits.filter((h) => isCompletedForDay(h, day)).length;
+  };
 
   return (
     <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
@@ -72,7 +100,7 @@ export function WeeklyAccordion({
         const dayHabits = getHabitsForDay(day);
         const isOpen = openDay === day;
         const isToday = index === todayIndex;
-        const completedCount = dayHabits.filter((h) => h.completed).length;
+        const completedCount = getCompletedCountForDay(day);
 
         return (
           <div key={day} className="border-b border-gray-100 last:border-b-0">
@@ -97,7 +125,7 @@ export function WeeklyAccordion({
                 {/* 루틴 개수 표시 */}
                 <span className="text-sm text-gray-600">
                   {dayHabits.length}개 루틴
-                  {dayHabits.length > 0 && (
+                  {dayHabits.length > 0 && isToday && (
                     <span className="text-gray-400 ml-1">
                       ({completedCount}/{dayHabits.length} 완료)
                     </span>
@@ -131,61 +159,71 @@ export function WeeklyAccordion({
                     등록된 루틴이 없습니다.
                   </p>
                 ) : (
-                  dayHabits.map((habit) => (
-                    <div
-                      key={habit.id}
-                      className={`flex items-center justify-between p-3 rounded-xl transition-all ${
-                        habit.completed
-                          ? "bg-green-50 border border-green-200"
-                          : "bg-gray-50 border border-gray-100"
-                      }`}
-                    >
-                      <div className="flex items-center gap-3">
-                        {/* 완료 체크 버튼 */}
-                        <button
-                          onClick={() => onToggleComplete(habit.id)}
-                          className={`w-6 h-6 rounded-full border-2 flex items-center justify-center transition-all ${
-                            habit.completed
-                              ? "bg-green-500 border-green-500"
-                              : "border-gray-300 hover:border-green-400"
-                          }`}
-                          aria-label={`${habit.title} ${habit.completed ? "완료 취소" : "완료"}`}
-                        >
-                          {habit.completed && (
-                            <Check className="w-4 h-4 text-white" />
-                          )}
-                        </button>
-                        {/* 습관 이름 */}
-                        <span
-                          className={`text-sm font-medium ${
-                            habit.completed
-                              ? "text-gray-400 line-through"
-                              : "text-gray-700"
-                          }`}
-                        >
-                          {habit.title}
-                        </span>
-                      </div>
+                  dayHabits.map((habit) => {
+                    const isCompleted = isCompletedForDay(habit, day);
+                    const canToggle = isToday;
 
-                      {/* 수정/삭제 버튼 */}
-                      <div className="flex items-center gap-1">
-                        <button
-                          onClick={() => onEdit(habit)}
-                          className="p-1.5 rounded-lg text-gray-400 hover:text-blue-500 hover:bg-blue-50 transition-colors"
-                          aria-label={`${habit.title} 수정`}
-                        >
-                          <Pencil className="w-4 h-4" />
-                        </button>
-                        <button
-                          onClick={() => onDelete(habit.id)}
-                          className="p-1.5 rounded-lg text-gray-400 hover:text-red-500 hover:bg-red-50 transition-colors"
-                          aria-label={`${habit.title} 삭제`}
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
+                    return (
+                      <div
+                        key={habit.id}
+                        className={`flex items-center justify-between p-3 rounded-xl transition-all ${
+                          isCompleted
+                            ? "bg-green-50 border border-green-200"
+                            : "bg-gray-50 border border-gray-100"
+                        }`}
+                      >
+                        <div className="flex items-center gap-3">
+                          {/* 완료 체크 버튼 - 오늘만 클릭 가능 */}
+                          <button
+                            onClick={() =>
+                              canToggle && onToggleComplete(habit.id)
+                            }
+                            disabled={!canToggle}
+                            className={`w-6 h-6 rounded-full border-2 flex items-center justify-center transition-all ${
+                              isCompleted
+                                ? "bg-green-500 border-green-500"
+                                : canToggle
+                                  ? "border-gray-300 hover:border-green-400"
+                                  : "border-gray-200 cursor-not-allowed opacity-50"
+                            }`}
+                            aria-label={`${habit.title} ${isCompleted ? "완료 취소" : "완료"}`}
+                          >
+                            {isCompleted && (
+                              <Check className="w-4 h-4 text-white" />
+                            )}
+                          </button>
+                          {/* 습관 이름 */}
+                          <span
+                            className={`text-sm font-medium ${
+                              isCompleted
+                                ? "text-gray-400 line-through"
+                                : "text-gray-700"
+                            }`}
+                          >
+                            {habit.title}
+                          </span>
+                        </div>
+
+                        {/* 수정/삭제 버튼 - 현재 요일 정보 전달 */}
+                        <div className="flex items-center gap-1">
+                          <button
+                            onClick={() => onEdit(habit, day)}
+                            className="p-1.5 rounded-lg text-gray-400 hover:text-blue-500 hover:bg-blue-50 transition-colors"
+                            aria-label={`${habit.title} 수정`}
+                          >
+                            <Pencil className="w-4 h-4" />
+                          </button>
+                          <button
+                            onClick={() => onDelete(habit.id, day)}
+                            className="p-1.5 rounded-lg text-gray-400 hover:text-red-500 hover:bg-red-50 transition-colors"
+                            aria-label={`${habit.title} 삭제`}
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
                       </div>
-                    </div>
-                  ))
+                    );
+                  })
                 )}
               </div>
             </div>

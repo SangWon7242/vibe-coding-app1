@@ -379,8 +379,30 @@ export default function HabitTrackerPage() {
 
   /**
    * 루틴 수정 핸들러
+   * @param habit 수정할 습관
+   * @param day 요일 (WeeklyAccordion에서 전달, 요일별 개별 수정 옵션 제공)
    */
-  const handleEditHabit = async (habit: Habit) => {
+  const handleEditHabit = async (habit: Habit, day?: DayOfWeek) => {
+    // 요일별 수정인 경우, 수정 범위 선택
+    let editScope: "all" | "single" = "all";
+    if (day && habit.days.length > 1) {
+      const { value: scope } = await Swal.fire({
+        title: "수정 범위 선택",
+        text: `"${habit.title}" 루틴을 어떻게 수정하시겠습니까?`,
+        icon: "question",
+        showCancelButton: true,
+        showDenyButton: true,
+        confirmButtonText: `${day}요일만 수정`,
+        denyButtonText: "모든 요일 수정",
+        cancelButtonText: "취소",
+        confirmButtonColor: "#3B82F6",
+        denyButtonColor: "#6B7280",
+      });
+
+      if (scope === undefined) return; // 취소
+      editScope = scope ? "single" : "all";
+    }
+
     // Step 1: 이름 수정
     const { value: newTitle } = await Swal.fire({
       title: "루틴 수정",
@@ -406,7 +428,7 @@ export default function HabitTrackerPage() {
       title: "아이콘 선택",
       html: generateIconSelectorHtml(habit.icon),
       showCancelButton: true,
-      confirmButtonText: "다음",
+      confirmButtonText: editScope === "single" ? "저장" : "다음",
       cancelButtonText: "이전",
       confirmButtonColor: "#3B82F6",
       preConfirm: () => {
@@ -419,21 +441,95 @@ export default function HabitTrackerPage() {
 
     if (!selectedIcon) return;
 
-    // Step 3: 요일 수정
+    // 단일 요일 수정인 경우
+    if (editScope === "single" && day) {
+      try {
+        // 기존 루틴에서 해당 요일 제거
+        const remainingDays = habit.days.filter((d) => d !== day);
+
+        if (remainingDays.length > 0) {
+          // 기존 루틴 업데이트 (해당 요일 제거)
+          await supabase
+            .from("habits")
+            .update({
+              days: remainingDays,
+              updated_at: new Date().toISOString(),
+            })
+            .eq("id", habit.id);
+        } else {
+          // 다른 요일이 없으면 기존 루틴 삭제
+          await supabase.from("habits").delete().eq("id", habit.id);
+        }
+
+        // 새 루틴 생성 (해당 요일만)
+        const { data: newHabit, error } = await supabase
+          .from("habits")
+          .insert({
+            user_id: TEMP_USER_ID,
+            title: newTitle.trim(),
+            icon: selectedIcon,
+            days: [day],
+          })
+          .select()
+          .single();
+
+        if (error) throw error;
+
+        // 로컬 상태 업데이트
+        let updatedHabits = habits;
+        if (remainingDays.length > 0) {
+          updatedHabits = habits.map((h) =>
+            h.id === habit.id
+              ? { ...h, days: remainingDays as DayOfWeek[] }
+              : h,
+          );
+        } else {
+          updatedHabits = habits.filter((h) => h.id !== habit.id);
+        }
+
+        setHabits([
+          ...updatedHabits,
+          {
+            ...newHabit,
+            days: newHabit.days as DayOfWeek[],
+            completed: false,
+            current: 0,
+          },
+        ]);
+
+        Swal.fire({
+          icon: "success",
+          title: "수정 완료!",
+          text: `${day}요일 루틴이 수정되었습니다.`,
+          timer: 1200,
+          showConfirmButton: false,
+        });
+      } catch (error) {
+        console.error("Error updating habit:", error);
+        Swal.fire({
+          icon: "error",
+          title: "수정 실패",
+          text: "루틴 수정 중 오류가 발생했습니다.",
+        });
+      }
+      return;
+    }
+
+    // 모든 요일 수정인 경우 - 요일 선택 단계 진행
     const { value: selectedDays } = await Swal.fire({
       title: "요일 선택",
       html: `
         <p class="text-sm text-gray-500 mb-4">루틴을 수행할 요일을 선택하세요</p>
         <div class="flex flex-wrap justify-center gap-2" id="day-selector">
           ${DAYS_OF_WEEK.map(
-            (day) => `
+            (d) => `
             <label class="cursor-pointer">
-              <input type="checkbox" value="${day}" class="hidden peer" ${habit.days.includes(day) ? "checked" : ""}>
+              <input type="checkbox" value="${d}" class="hidden peer" ${habit.days.includes(d) ? "checked" : ""}>
               <div class="w-10 h-10 rounded-full border-2 border-gray-300 flex items-center justify-center 
                           text-sm font-bold text-gray-500 transition-all
                           peer-checked:bg-blue-500 peer-checked:border-blue-500 peer-checked:text-white
                           hover:border-blue-400">
-                ${day}
+                ${d}
               </div>
             </label>
           `,
@@ -505,15 +601,86 @@ export default function HabitTrackerPage() {
 
   /**
    * 루틴 삭제 핸들러
+   * @param id 삭제할 습관 ID
+   * @param day 요일 (WeeklyAccordion에서 전달, 요일별 개별 삭제 옵션 제공)
    */
-  const handleDeleteHabit = async (id: string) => {
+  const handleDeleteHabit = async (id: string, day?: DayOfWeek) => {
     const habit = habits.find((h) => h.id === id);
     if (!habit) return;
 
+    // 요일별 삭제인 경우, 삭제 범위 선택
+    let deleteScope: "all" | "single" = "all";
+    if (day && habit.days.length > 1) {
+      const { value: scope } = await Swal.fire({
+        title: "삭제 범위 선택",
+        text: `"${habit.title}" 루틴을 어떻게 삭제하시겠습니까?`,
+        icon: "warning",
+        showCancelButton: true,
+        showDenyButton: true,
+        confirmButtonText: `${day}요일만 삭제`,
+        denyButtonText: "모든 요일 삭제",
+        cancelButtonText: "취소",
+        confirmButtonColor: "#F59E0B",
+        denyButtonColor: "#EF4444",
+      });
+
+      if (scope === undefined) return; // 취소
+      deleteScope = scope ? "single" : "all";
+    }
+
+    // 단일 요일 삭제
+    if (deleteScope === "single" && day) {
+      const remainingDays = habit.days.filter((d) => d !== day);
+
+      try {
+        if (remainingDays.length > 0) {
+          // 해당 요일만 제거
+          const { error } = await supabase
+            .from("habits")
+            .update({
+              days: remainingDays,
+              updated_at: new Date().toISOString(),
+            })
+            .eq("id", id);
+
+          if (error) throw error;
+
+          // 로컬 상태 업데이트
+          setHabits(
+            habits.map((h) =>
+              h.id === id ? { ...h, days: remainingDays as DayOfWeek[] } : h,
+            ),
+          );
+        } else {
+          // 마지막 요일이면 전체 삭제
+          const { error } = await supabase.from("habits").delete().eq("id", id);
+          if (error) throw error;
+          setHabits(habits.filter((h) => h.id !== id));
+        }
+
+        Swal.fire({
+          icon: "success",
+          title: "삭제 완료",
+          text: `${day}요일에서 "${habit.title}" 루틴이 삭제되었습니다.`,
+          timer: 1200,
+          showConfirmButton: false,
+        });
+      } catch (error) {
+        console.error("Error deleting habit:", error);
+        Swal.fire({
+          icon: "error",
+          title: "삭제 실패",
+          text: "루틴 삭제 중 오류가 발생했습니다.",
+        });
+      }
+      return;
+    }
+
+    // 모든 요일 삭제
     const result = await Swal.fire({
       icon: "warning",
       title: "삭제 확인",
-      text: "정말 삭제하겠습니까?",
+      text: `"${habit.title}" 루틴을 모든 요일에서 삭제하시겠습니까?`,
       showCancelButton: true,
       confirmButtonColor: "#EF4444",
       cancelButtonColor: "#6B7280",
@@ -532,7 +699,7 @@ export default function HabitTrackerPage() {
         Swal.fire({
           icon: "success",
           title: "삭제 완료",
-          text: `"${habit.title}" 루틴이 삭제되었습니다.`,
+          text: `"${habit.title}" 루틴이 모든 요일에서 삭제되었습니다.`,
           timer: 1200,
           showConfirmButton: false,
         });
