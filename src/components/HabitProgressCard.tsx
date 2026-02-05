@@ -1,6 +1,7 @@
 "use client";
 
 import { Habit } from "@/types/habit";
+import { getIconOption } from "@/constants/icons";
 
 interface HabitProgressCardProps {
   habit: Habit;
@@ -13,6 +14,10 @@ interface HabitProgressCardProps {
 export function HabitProgressCard({ habit }: HabitProgressCardProps) {
   // 진행률 계산 (0~100%)
   const progress = habit.goal > 0 ? (habit.current / habit.goal) * 100 : 0;
+
+  // 아이콘에서 색상 가져오기
+  const iconOption = getIconOption(habit.icon);
+  const color = iconOption?.color || "#3B82F6";
 
   return (
     <div className="py-3">
@@ -30,7 +35,7 @@ export function HabitProgressCard({ habit }: HabitProgressCardProps) {
           className="h-full rounded-full transition-all duration-500 ease-out"
           style={{
             width: `${progress}%`,
-            backgroundColor: habit.color,
+            backgroundColor: color,
           }}
         />
       </div>
