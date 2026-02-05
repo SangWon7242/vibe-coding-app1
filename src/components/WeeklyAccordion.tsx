@@ -24,9 +24,9 @@ const dayColorMap: Record<DayOfWeek, string> = {
 
 interface WeeklyAccordionProps {
   habits: Habit[];
-  onToggleComplete: (id: number) => void;
+  onToggleComplete: (id: string) => void;
   onEdit: (habit: Habit) => void;
-  onDelete: (id: number) => void;
+  onDelete: (id: string) => void;
 }
 
 /**

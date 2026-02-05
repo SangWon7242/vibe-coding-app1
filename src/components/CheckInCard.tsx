@@ -52,7 +52,7 @@ const iconColorMap: Record<string, string> = {
 
 interface CheckInCardProps {
   habit: Habit;
-  onToggle: (id: number) => void;
+  onToggle: (id: string) => void;
 }
 
 /**

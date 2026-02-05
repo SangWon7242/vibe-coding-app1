@@ -4,25 +4,32 @@
 export type DayOfWeek = "월" | "화" | "수" | "목" | "금" | "토" | "일";
 
 /**
- * Habit 데이터 타입 정의
- * @property id - 고유 식별자
- * @property title - 습관 제목
- * @property icon - 아이콘 종류
- * @property color - 프로그레스 바 색상
- * @property current - 현재 달성 횟수
- * @property goal - 목표 횟수
- * @property unit - 단위 (잔, 경, 분 등)
- * @property completed - 오늘 체크인 완료 여부
- * @property days - 수행할 요일 목록
+ * 아이콘 타입 정의
+ */
+export type IconType =
+  | "droplet"
+  | "run"
+  | "book"
+  | "brain"
+  | "dumbbell"
+  | "pen"
+  | "moon";
+
+/**
+ * Habit 데이터 타입 정의 (프론트엔드용)
+ * DB에서 가져온 데이터에 오늘의 체크인 상태를 추가
  */
 export interface Habit {
-  id: number;
+  id: string;
+  user_id: string;
   title: string;
-  icon: "droplet" | "run" | "book" | "brain" | "dumbbell" | "pen" | "moon";
-  color: string;
-  current: number;
+  icon: IconType;
   goal: number;
   unit: string;
-  completed: boolean;
   days: DayOfWeek[];
+  created_at: string;
+  updated_at: string;
+  // 오늘 체크인 상태 (프론트엔드에서 계산)
+  completed: boolean;
+  current: number;
 }

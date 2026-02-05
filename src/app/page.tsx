@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useCallback } from "react";
 import {
   Search,
   Home,
@@ -15,14 +15,14 @@ import { Button } from "@/components/ui/button";
 import { CheckInCard } from "@/components/CheckInCard";
 import { WeeklyAccordion } from "@/components/WeeklyAccordion";
 import { EmptyState } from "@/components/EmptyState";
-import { Habit, DayOfWeek } from "@/types/habit";
-import { initialHabits } from "@/data/habits";
-import {
-  ICON_OPTIONS,
-  getIconOption,
-  getIconSvgPath,
-  IconType,
-} from "@/constants/icons";
+import { Habit, DayOfWeek, IconType } from "@/types/habit";
+import { supabase } from "@/lib/supabase";
+import { ICON_OPTIONS, getIconSvgPath } from "@/constants/icons";
+
+/**
+ * 임시 사용자 ID (추후 인증 연동 시 변경)
+ */
+const TEMP_USER_ID = "00000000-0000-0000-0000-000000000001";
 
 /**
  * 요일 목록
@@ -51,9 +51,18 @@ function getTodayDayOfWeek(): DayOfWeek {
   return dayMap[today];
 }
 
+/**
+ * 오늘 날짜 (YYYY-MM-DD 형식)
+ */
+function getTodayDateString(): string {
+  const now = new Date();
+  return now.toISOString().split("T")[0];
+}
+
 export default function HabitTrackerPage() {
   // 습관 목록 상태 관리
-  const [habits, setHabits] = useState<Habit[]>(initialHabits);
+  const [habits, setHabits] = useState<Habit[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
 
   // 오늘 요일
   const todayDay = getTodayDayOfWeek();
@@ -62,34 +71,129 @@ export default function HabitTrackerPage() {
   const todayHabits = habits.filter((h) => h.days.includes(todayDay));
 
   /**
+   * 습관 목록 및 오늘 로그 불러오기
+   */
+  const fetchHabits = useCallback(async () => {
+    setIsLoading(true);
+    try {
+      // 습관 목록 조회
+      const { data: habitsData, error: habitsError } = await supabase
+        .from("habits")
+        .select("*")
+        .eq("user_id", TEMP_USER_ID)
+        .order("created_at", { ascending: true });
+
+      if (habitsError) throw habitsError;
+
+      // 오늘 체크인 기록 조회
+      const today = getTodayDateString();
+      const { data: logsData, error: logsError } = await supabase
+        .from("habit_logs")
+        .select("*")
+        .eq("user_id", TEMP_USER_ID)
+        .eq("completed_at", today);
+
+      if (logsError) throw logsError;
+
+      // 습관 데이터에 오늘 체크인 상태 병합
+      const habitsWithStatus: Habit[] = (habitsData || []).map((habit) => {
+        const todayLog = logsData?.find((log) => log.habit_id === habit.id);
+        return {
+          ...habit,
+          days: habit.days as DayOfWeek[],
+          completed: todayLog ? todayLog.current >= habit.goal : false,
+          current: todayLog?.current || 0,
+        };
+      });
+
+      setHabits(habitsWithStatus);
+    } catch (error) {
+      console.error("Error fetching habits:", error);
+      Swal.fire({
+        icon: "error",
+        title: "데이터 로드 실패",
+        text: "습관 데이터를 불러오는데 실패했습니다.",
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
+  // 초기 데이터 로드
+  useEffect(() => {
+    fetchHabits();
+  }, [fetchHabits]);
+
+  /**
    * 체크인 토글 핸들러
    */
-  const handleToggleCheckIn = (id: number) => {
-    setHabits(
-      habits.map((habit) => {
-        if (habit.id === id) {
-          const newCompleted = !habit.completed;
-          const newCurrent = newCompleted
-            ? Math.min(habit.current + 1, habit.goal)
-            : Math.max(habit.current - 1, 0);
+  const handleToggleCheckIn = async (id: string) => {
+    const habit = habits.find((h) => h.id === id);
+    if (!habit) return;
 
-          if (newCompleted) {
-            Swal.fire({
-              icon: "success",
-              title: "체크인 완료!",
-              text: `${habit.title} 완료되었습니다.`,
-              timer: 1200,
-              showConfirmButton: false,
-              position: "top",
-              toast: true,
-            });
-          }
+    const today = getTodayDateString();
+    const newCompleted = !habit.completed;
+    const newCurrent = newCompleted
+      ? Math.min(habit.current + 1, habit.goal)
+      : Math.max(habit.current - 1, 0);
 
-          return { ...habit, completed: newCompleted, current: newCurrent };
-        }
-        return habit;
-      }),
-    );
+    try {
+      // 기존 로그 확인
+      const { data: existingLog } = await supabase
+        .from("habit_logs")
+        .select("*")
+        .eq("habit_id", id)
+        .eq("completed_at", today)
+        .single();
+
+      if (existingLog) {
+        // 기존 로그 업데이트
+        const { error } = await supabase
+          .from("habit_logs")
+          .update({ current: newCurrent })
+          .eq("id", existingLog.id);
+
+        if (error) throw error;
+      } else {
+        // 새 로그 생성
+        const { error } = await supabase.from("habit_logs").insert({
+          habit_id: id,
+          user_id: TEMP_USER_ID,
+          completed_at: today,
+          current: newCurrent,
+        });
+
+        if (error) throw error;
+      }
+
+      // 로컬 상태 업데이트
+      setHabits(
+        habits.map((h) =>
+          h.id === id
+            ? { ...h, completed: newCompleted, current: newCurrent }
+            : h,
+        ),
+      );
+
+      if (newCompleted) {
+        Swal.fire({
+          icon: "success",
+          title: "체크인 완료!",
+          text: `${habit.title} 완료되었습니다.`,
+          timer: 1200,
+          showConfirmButton: false,
+          position: "top",
+          toast: true,
+        });
+      }
+    } catch (error) {
+      console.error("Error toggling check-in:", error);
+      Swal.fire({
+        icon: "error",
+        title: "체크인 실패",
+        text: "체크인 처리 중 오류가 발생했습니다.",
+      });
+    }
   };
 
   /**
@@ -119,7 +223,7 @@ export default function HabitTrackerPage() {
   };
 
   /**
-   * 새 습관 추가 핸들러 (요일 및 아이콘 선택 포함)
+   * 새 습관 추가 핸들러
    */
   const handleAddHabit = async () => {
     // Step 1: 습관 이름 입력
@@ -191,16 +295,11 @@ export default function HabitTrackerPage() {
       cancelButtonText: "이전",
       confirmButtonColor: "#3B82F6",
       didOpen: () => {
-        // 전체 선택 버튼
         document.getElementById("select-all")?.addEventListener("click", () => {
           document
             .querySelectorAll<HTMLInputElement>("#day-selector input")
             .forEach((cb) => (cb.checked = true));
-          document.querySelectorAll("#day-selector input").forEach((cb) => {
-            cb.dispatchEvent(new Event("change"));
-          });
         });
-        // 평일만 선택
         document
           .getElementById("select-weekday")
           ?.addEventListener("click", () => {
@@ -210,7 +309,6 @@ export default function HabitTrackerPage() {
                 cb.checked = ["월", "화", "수", "목", "금"].includes(cb.value);
               });
           });
-        // 주말만 선택
         document
           .getElementById("select-weekend")
           ?.addEventListener("click", () => {
@@ -236,40 +334,51 @@ export default function HabitTrackerPage() {
 
     if (!selectedDays) return;
 
-    // 선택된 아이콘 옵션 조회
-    const iconOption = getIconOption(selectedIcon);
-    if (!iconOption) return;
+    // DB에 저장
+    try {
+      const { data, error } = await supabase
+        .from("habits")
+        .insert({
+          user_id: TEMP_USER_ID,
+          title: title.trim(),
+          icon: selectedIcon,
+          days: selectedDays,
+        })
+        .select()
+        .single();
 
-    // 습관 추가
-    const newId =
-      habits.length > 0 ? Math.max(...habits.map((h) => h.id)) + 1 : 1;
+      if (error) throw error;
 
-    setHabits([
-      ...habits,
-      {
-        id: newId,
-        title: title.trim(),
-        icon: selectedIcon,
-        color: iconOption.color,
-        current: 0,
-        goal: 10,
-        unit: "회",
-        completed: false,
-        days: selectedDays,
-      },
-    ]);
+      // 로컬 상태에 추가
+      setHabits([
+        ...habits,
+        {
+          ...data,
+          days: data.days as DayOfWeek[],
+          completed: false,
+          current: 0,
+        },
+      ]);
 
-    Swal.fire({
-      icon: "success",
-      title: "추가 완료!",
-      text: `"${title}" 루틴이 추가되었습니다.`,
-      timer: 1500,
-      showConfirmButton: false,
-    });
+      Swal.fire({
+        icon: "success",
+        title: "추가 완료!",
+        text: `"${title}" 루틴이 추가되었습니다.`,
+        timer: 1500,
+        showConfirmButton: false,
+      });
+    } catch (error) {
+      console.error("Error adding habit:", error);
+      Swal.fire({
+        icon: "error",
+        title: "추가 실패",
+        text: "루틴 추가 중 오류가 발생했습니다.",
+      });
+    }
   };
 
   /**
-   * 루틴 수정 핸들러 (아이콘 수정 포함)
+   * 루틴 수정 핸들러
    */
   const handleEditHabit = async (habit: Habit) => {
     // Step 1: 이름 수정
@@ -350,37 +459,54 @@ export default function HabitTrackerPage() {
 
     if (!selectedDays) return;
 
-    // 선택된 아이콘 옵션 조회
-    const iconOption = getIconOption(selectedIcon);
-    if (!iconOption) return;
+    // DB 업데이트
+    try {
+      const { error } = await supabase
+        .from("habits")
+        .update({
+          title: newTitle.trim(),
+          icon: selectedIcon,
+          days: selectedDays,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", habit.id);
 
-    // 습관 업데이트
-    setHabits(
-      habits.map((h) =>
-        h.id === habit.id
-          ? {
-              ...h,
-              title: newTitle.trim(),
-              icon: selectedIcon,
-              color: iconOption.color,
-              days: selectedDays,
-            }
-          : h,
-      ),
-    );
+      if (error) throw error;
 
-    Swal.fire({
-      icon: "success",
-      title: "수정 완료!",
-      timer: 1200,
-      showConfirmButton: false,
-    });
+      // 로컬 상태 업데이트
+      setHabits(
+        habits.map((h) =>
+          h.id === habit.id
+            ? {
+                ...h,
+                title: newTitle.trim(),
+                icon: selectedIcon,
+                days: selectedDays,
+              }
+            : h,
+        ),
+      );
+
+      Swal.fire({
+        icon: "success",
+        title: "수정 완료!",
+        timer: 1200,
+        showConfirmButton: false,
+      });
+    } catch (error) {
+      console.error("Error updating habit:", error);
+      Swal.fire({
+        icon: "error",
+        title: "수정 실패",
+        text: "루틴 수정 중 오류가 발생했습니다.",
+      });
+    }
   };
 
   /**
    * 루틴 삭제 핸들러
    */
-  const handleDeleteHabit = async (id: number) => {
+  const handleDeleteHabit = async (id: string) => {
     const habit = habits.find((h) => h.id === id);
     if (!habit) return;
 
@@ -396,14 +522,28 @@ export default function HabitTrackerPage() {
     });
 
     if (result.isConfirmed) {
-      setHabits(habits.filter((h) => h.id !== id));
-      Swal.fire({
-        icon: "success",
-        title: "삭제 완료",
-        text: `"${habit.title}" 루틴이 삭제되었습니다.`,
-        timer: 1200,
-        showConfirmButton: false,
-      });
+      try {
+        const { error } = await supabase.from("habits").delete().eq("id", id);
+
+        if (error) throw error;
+
+        setHabits(habits.filter((h) => h.id !== id));
+
+        Swal.fire({
+          icon: "success",
+          title: "삭제 완료",
+          text: `"${habit.title}" 루틴이 삭제되었습니다.`,
+          timer: 1200,
+          showConfirmButton: false,
+        });
+      } catch (error) {
+        console.error("Error deleting habit:", error);
+        Swal.fire({
+          icon: "error",
+          title: "삭제 실패",
+          text: "루틴 삭제 중 오류가 발생했습니다.",
+        });
+      }
     }
   };
 
@@ -414,6 +554,15 @@ export default function HabitTrackerPage() {
     todayHabits.length > 0
       ? Math.round((completedCount / todayHabits.length) * 100)
       : 0;
+
+  // 로딩 중 표시
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-gray-500">로딩 중...</div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gray-50 pb-24">
